@@ -7,10 +7,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: compaction_audit.py self-test against known fixtures
         run: python3 compaction_audit.py --self-test
+      - name: dropped file paths are recovered from the transcript
+        run: |
+          python3 compaction_audit.py fixtures/sample.jsonl --files | grep "src/router/main.py"
+          python3 compaction_audit.py fixtures/sample.jsonl --files | grep "3 file(s) read and dropped"
+      - name: a Bash tool call is not mistaken for a file read
+        run: |
+          python3 compaction_audit.py fixtures/sample.jsonl --files | grep -qv "command" || exit 1
       - name: single-window and json modes
         run: |
           python3 compaction_audit.py fixtures/sample.jsonl --only 2 | grep "window 2 of 2"
-          python3 compaction_audit.py fixtures/sample.jsonl --json | python3 -c "import json,sys; d=json.load(sys.stdin); assert len(list(d.values())[0])==2"
+          python3 compaction_audit.py fixtures/sample.jsonl --json | python3 -c "import json,sys; d=json.load(sys.stdin); w=list(d.values())[0]; assert len(w)==2 and w[0]['files']"
       - name: a directory with no compactions exits clean
         run: |
           mkdir -p /tmp/empty && echo '{"type":"user","message":{"content":"hi"}}' > /tmp/empty/s.jsonl

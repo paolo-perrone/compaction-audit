@@ -31,9 +31,10 @@ Or at one transcript, or a whole project directory:
 python3 compaction_audit.py ~/.claude/projects/<project>/<session>.jsonl
 ```
 
-One compaction at a time, and machine-readable for CI:
+Every dropped file path, one compaction at a time, or machine-readable for CI:
 
 ```bash
+python3 compaction_audit.py --latest --files
 python3 compaction_audit.py --latest --only 3
 python3 compaction_audit.py --latest --json
 ```
@@ -45,10 +46,12 @@ Nothing leaves your machine.
 
 One line per compaction: the rows it replaced, estimated tokens in, summary tokens out, and
 the share kept. Then the composition of what went in: tool results against the agent's own
-turns against your typed messages.
+turns against your typed messages. Then the file paths themselves, every source file the
+agent opened inside the dropped windows and no longer holds.
 
 On the session that produced the issue it reports six compactions, 4,820,699 tokens of
-conversation replaced by 26,593 tokens of summary, 0.6% kept. Tool results were 50.7% of
+conversation replaced by 26,593 tokens of summary, 0.6% kept, and 158 files the agent read
+and no longer has. Tool results were 50.7% of
 what went in; the author's typed messages were 5.7% of what went in and 29% of what came
 out. Compaction keeps what you asked at roughly five times the rate it keeps what the
 agent read.
@@ -57,7 +60,9 @@ agent read.
 
 A token is estimated as 4 characters, the standard rough cut. Window boundaries are the
 `isCompactSummary` rows Claude Code writes into the transcript; each window runs from the
-previous compaction (or the session start) to the summary that replaced it. Only `user` and
+previous compaction (or the session start) to the summary that replaced it. File paths come
+from the `file_path` argument on `Read`, `Edit`, `Write`, `MultiEdit` and `NotebookEdit`
+tool calls, so a file the agent only ran `grep` against will not appear. Only `user` and
 `assistant` rows count toward window size, so queue operations and attachments do not
 inflate the totals. Torn lines are skipped rather than fatal.
 
@@ -72,6 +77,5 @@ format has changed its `isCompactSummary` flag; open an issue.
 ## Reading the result
 
 If `kept` sits under 1%, everything the agent read in that window is gone: file contents,
-tool output, the evidence behind its conclusions. The instruction usually survives, the
-evidence usually does not, so expect the agent to re-read files it already read, without
-telling you.
+tool output, the evidence behind its conclusions. Ask it about any file on the dropped list
+and it answers from the summary, at the same confidence, without saying so.

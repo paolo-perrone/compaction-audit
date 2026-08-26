@@ -1,18 +1,25 @@
 [
  {
-  "rows": 4,
-  "tokens_in": 1628,
+  "rows": 5,
+  "tokens_in": 1523,
   "tokens_out": 100,
   "user_in": 500,
   "tool_in": 760,
-  "assistant_in": 393
+  "assistant_in": 316,
+  "files": [
+   "src/router/main.py",
+   "src/router/config.py"
+  ]
  },
  {
   "rows": 3,
-  "tokens_in": 600,
+  "tokens_in": 609,
   "tokens_out": 50,
   "user_in": 400,
   "tool_in": 0,
-  "assistant_in": 207
+  "assistant_in": 229,
+  "files": [
+   "tests/test_router.py"
+  ]
  }
 ]

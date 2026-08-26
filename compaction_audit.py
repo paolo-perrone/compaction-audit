@@ -51,6 +51,23 @@ def text_of(row):
     return ""
 
 
+FILE_TOOLS = {"Read", "Edit", "Write", "NotebookEdit", "MultiEdit"}
+
+
+def files_touched(row):
+    """Paths the agent actually opened in this row. The tool_use blocks carry them
+    verbatim, so a dropped window's file list is recoverable from the transcript."""
+    out = []
+    for b in blocks(row):
+        if not isinstance(b, dict) or b.get("type") != "tool_use":
+            continue
+        if b.get("name") in FILE_TOOLS:
+            p = (b.get("input") or {}).get("file_path")
+            if isinstance(p, str) and p:
+                out.append(p)
+    return out
+
+
 def blocks(row):
     c = (row.get("message") or {}).get("content")
     return c if isinstance(c, list) else []
@@ -76,8 +93,14 @@ def audit(rows):
                     user += len(text_of(r)) // 4
             elif r.get("type") == "assistant":
                 asst += len(json.dumps(blocks(r))) // 4
+        files = []
+        for r in w:
+            for p in files_touched(r):
+                if p not in files:
+                    files.append(p)
         windows.append({"rows": len(w), "tokens_in": tokens_in, "tokens_out": tokens_out,
-                        "user_in": user, "tool_in": tool, "assistant_in": asst})
+                        "user_in": user, "tool_in": tool, "assistant_in": asst,
+                        "files": files})
         prev = i
     return windows
 
@@ -100,8 +123,19 @@ def report(windows, label):
     if comp:
         print(f"\nwhat went in:  tool results {t/comp*100:.1f}%  ·  "
               f"the agent's turns {a/comp*100:.1f}%  ·  your messages {u/comp*100:.1f}%")
-    print("\nif 'kept' sits under 1%, everything the agent read is gone. Expect it to")
-    print("re-read files it already read, without telling you.")
+    dropped = []
+    for w in windows:
+        for p in w["files"]:
+            if p not in dropped:
+                dropped.append(p)
+    if dropped:
+        print(f"\nfiles the agent read and no longer has ({len(dropped)}):")
+        for p in dropped[:25]:
+            print("   " + p)
+        if len(dropped) > 25:
+            print(f"   ... and {len(dropped) - 25} more (--files for all)")
+    print("\nif 'kept' sits under 1%, everything the agent read is gone. Ask it about any")
+    print("file above and it answers from the summary, without saying so.")
 
 
 def latest_dir():
@@ -122,6 +156,7 @@ def main():
     p.add_argument("--self-test", action="store_true", help="run against the bundled fixtures")
     p.add_argument("--only", type=int, metavar="N", help="report a single compaction window in detail")
     p.add_argument("--json", action="store_true", help="machine-readable output, for CI or tracking kept%% over time")
+    p.add_argument("--files", action="store_true", help="print every dropped file path, unabridged")
     a = p.parse_args()
 
     if a.self_test:
@@ -154,7 +189,16 @@ def main():
         if not w:
             continue
         found = True
-        if a.only:
+        if a.files:
+            seen = []
+            for x in w:
+                for p in x["files"]:
+                    if p not in seen:
+                        seen.append(p)
+            print(f"{os.path.basename(f)}  {len(seen)} file(s) read and dropped")
+            for p in seen:
+                print("  " + p)
+        elif a.only:
             if not 1 <= a.only <= len(w):
                 sys.exit(f"{os.path.basename(f)}: has {len(w)} compaction(s), no window {a.only}")
             x = w[a.only - 1]
@@ -165,6 +209,10 @@ def main():
             if comp:
                 print(f"  in: tool results {x['tool_in']/comp*100:.1f}% · the agent's turns "
                       f"{x['assistant_in']/comp*100:.1f}% · your messages {x['user_in']/comp*100:.1f}%")
+            if x["files"]:
+                print(f"  files it read and no longer has ({len(x['files'])}):")
+                for p in x["files"]:
+                    print("     " + p)
         else:
             report(w, os.path.basename(f))
             print()
