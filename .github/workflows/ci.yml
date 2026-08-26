@@ -1,0 +1,13 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: compaction_audit.py self-test against known fixtures
+        run: python3 compaction_audit.py --self-test
+      - name: a directory with no compactions exits clean
+        run: |
+          mkdir -p /tmp/empty && echo '{"type":"user","message":{"content":"hi"}}' > /tmp/empty/s.jsonl
+          python3 compaction_audit.py /tmp/empty | grep "never ran out of room"
