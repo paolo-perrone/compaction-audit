@@ -1,11 +1,14 @@
 # compaction-audit
 
+> **Status:** run end to end. The self-test is green in CI, the audit reproduced the
+> issue's measurement on the session that produced it, and the fresh-clone path is
+> verified on stock `python3`.
+
+Companion to [Claude Code vs Codex CLI vs Cursor in 2026](https://theaiengineer.substack.com/p/claude-code-vs-codex-cli-vs-cursor-in-2026).
+
 When Claude Code runs out of room it compacts: the conversation so far is replaced with a
 written summary and the rest is dropped. No vendor documents what survives. This prints it,
 from the transcript files already sitting on your machine.
-
-Companion artifact to *Claude Code vs Codex CLI vs Cursor in 2026*, an issue of
-[The AI Engineer](https://theaiengineer.substack.com).
 
 ## Run it
 
@@ -26,6 +29,13 @@ Or at one transcript, or a whole project directory:
 
 ```bash
 python3 compaction_audit.py ~/.claude/projects/<project>/<session>.jsonl
+```
+
+One compaction at a time, and machine-readable for CI:
+
+```bash
+python3 compaction_audit.py --latest --only 3
+python3 compaction_audit.py --latest --json
 ```
 
 Standard library only, Python 3.9+, no install. It reads locally and prints aggregates.
@@ -52,7 +62,12 @@ previous compaction (or the session start) to the summary that replaced it. Only
 inflate the totals. Torn lines are skipped rather than fatal.
 
 The estimate is deliberately simple. The point is the ratio, and the ratio survives the
-4-characters approximation.
+4-characters approximation. The composition percentages are measured over the serialized
+message blocks, so their total differs slightly from the window token column; both follow
+the article's method exactly, which is what makes its numbers reproducible here.
+
+If it reports no compactions for a session you know compacted, Claude Code's transcript
+format has changed its `isCompactSummary` flag; open an issue.
 
 ## Reading the result
 

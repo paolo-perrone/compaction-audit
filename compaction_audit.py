@@ -120,6 +120,8 @@ def main():
     p.add_argument("path", nargs="?", help="a transcript .jsonl, or a directory of them")
     p.add_argument("--latest", action="store_true", help="audit the most recently active project")
     p.add_argument("--self-test", action="store_true", help="run against the bundled fixtures")
+    p.add_argument("--only", type=int, metavar="N", help="report a single compaction window in detail")
+    p.add_argument("--json", action="store_true", help="machine-readable output, for CI or tracking kept%% over time")
     a = p.parse_args()
 
     if a.self_test:
@@ -143,11 +145,27 @@ def main():
     files = [target] if os.path.isfile(target) else sorted(glob.glob(os.path.join(target, "*.jsonl")))
     if not files:
         sys.exit(f"no .jsonl files under {target}")
+    if a.json:
+        print(json.dumps({os.path.basename(f): audit(rows_of(f)) for f in files}, indent=1))
+        return
     found = False
     for f in files:
         w = audit(rows_of(f))
-        if w:
-            found = True
+        if not w:
+            continue
+        found = True
+        if a.only:
+            if not 1 <= a.only <= len(w):
+                sys.exit(f"{os.path.basename(f)}: has {len(w)} compaction(s), no window {a.only}")
+            x = w[a.only - 1]
+            comp = x["user_in"] + x["tool_in"] + x["assistant_in"]
+            print(f"{os.path.basename(f)}  window {a.only} of {len(w)}")
+            print(f"  rows replaced {x['rows']:,} · tokens in {x['tokens_in']:,} · summary {x['tokens_out']:,} "
+                  f"· kept {x['tokens_out']/x['tokens_in']*100 if x['tokens_in'] else 0:.1f}%")
+            if comp:
+                print(f"  in: tool results {x['tool_in']/comp*100:.1f}% · the agent's turns "
+                      f"{x['assistant_in']/comp*100:.1f}% · your messages {x['user_in']/comp*100:.1f}%")
+        else:
             report(w, os.path.basename(f))
             print()
     if not found:
