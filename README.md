@@ -4,7 +4,7 @@
 > issue's measurement on the session that produced it, and the fresh-clone path is
 > verified on stock `python3`.
 
-Companion to [Claude Code vs Codex CLI vs Cursor in 2026](https://theaiengineer.substack.com/p/claude-code-vs-codex-cli-vs-cursor-in-2026).
+Companion to [Claude Code vs Codex CLI vs Cursor in 2026](https://theaiengineer.substack.com/p/claude-code-vs-codex-cli-vs-cursor).
 
 When Claude Code runs out of room it compacts: the conversation so far is replaced with a
 written summary and the rest is dropped. No vendor documents what survives. This prints it,
@@ -71,8 +71,24 @@ The estimate is deliberately simple. The point is the ratio, and the ratio survi
 message blocks, so their total differs slightly from the window token column; both follow
 the article's method exactly, which is what makes its numbers reproducible here.
 
-If it reports no compactions for a session you know compacted, Claude Code's transcript
+If it reports no compactions for a session you know compacted, check which project it read
+first: `--latest` picks the project whose transcripts were written most recently, so passing
+the path yourself is the way to be certain. If the path is right, Claude Code's transcript
 format has changed its `isCompactSummary` flag; open an issue.
+
+Anything you paste into an issue leaves your machine, and the output carries absolute paths
+from your own filesystem. The tool itself makes no network calls, but redact before posting.
+
+## Tracking it over time
+
+`--json` prints every window with a `kept_pct`, and always exits 0. To make a build fail when
+a session drops too much, add a floor:
+
+```
+python3 compaction_audit.py ~/.claude/projects/my-project --json --min-kept 5
+```
+
+That exits 1 when any window kept less than 5% of its tokens, and names the worst one on stderr.
 
 ## Reading the result
 

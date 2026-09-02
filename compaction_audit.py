@@ -146,7 +146,17 @@ def latest_dir():
             if os.path.isdir(os.path.join(base, d))]
     if not dirs:
         sys.exit("no project directories under ~/.claude/projects")
-    return max(dirs, key=os.path.getmtime)
+    # Rank by the newest TRANSCRIPT, never by the directory's own mtime. A
+    # directory's mtime only moves when an entry is added or removed, so a
+    # project whose transcripts are appended to in place looks stale and
+    # --latest silently audits the wrong project, reporting "no compactions"
+    # on a session that compacted. Measured 2026-08-31: four of the top five
+    # projects on this machine had a directory mtime lagging their newest
+    # transcript, one by three and a half months.
+    def newest_transcript(d):
+        stamps = [os.path.getmtime(f) for f in glob.glob(os.path.join(d, "*.jsonl"))]
+        return max(stamps) if stamps else os.path.getmtime(d)
+    return max(dirs, key=newest_transcript)
 
 
 def main():
@@ -156,6 +166,9 @@ def main():
     p.add_argument("--self-test", action="store_true", help="run against the bundled fixtures")
     p.add_argument("--only", type=int, metavar="N", help="report a single compaction window in detail")
     p.add_argument("--json", action="store_true", help="machine-readable output, for CI or tracking kept%% over time")
+    p.add_argument("--min-kept", type=float, metavar="PCT",
+                   help="exit 1 if any window kept less than PCT%% of its tokens "
+                        "(use in CI; --json alone always exits 0)")
     p.add_argument("--files", action="store_true", help="print every dropped file path, unabridged")
     a = p.parse_args()
 
@@ -180,9 +193,20 @@ def main():
     files = [target] if os.path.isfile(target) else sorted(glob.glob(os.path.join(target, "*.jsonl")))
     if not files:
         sys.exit(f"no .jsonl files under {target}")
+    worst = None
     if a.json:
-        print(json.dumps({os.path.basename(f): audit(rows_of(f)) for f in files}, indent=1))
+        out = {os.path.basename(f): audit(rows_of(f)) for f in files}
+        for windows in out.values():
+            for w in windows:
+                w["kept_pct"] = round(100.0 * w["tokens_out"] / w["tokens_in"], 4) if w["tokens_in"] else 0.0
+                worst = w["kept_pct"] if worst is None else min(worst, w["kept_pct"])
+        print(json.dumps(out, indent=1))
+        if a.min_kept is not None and worst is not None and worst < a.min_kept:
+            sys.stderr.write(f"kept {worst}% in the worst window, under the {a.min_kept}% floor\n")
+            sys.exit(1)
         return
+    if a.min_kept is not None:
+        sys.exit("--min-kept only applies with --json")
     found = False
     for f in files:
         w = audit(rows_of(f))

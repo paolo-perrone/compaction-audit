@@ -13,11 +13,21 @@ jobs:
           python3 compaction_audit.py fixtures/sample.jsonl --files | grep "3 file(s) read and dropped"
       - name: a Bash tool call is not mistaken for a file read
         run: |
-          python3 compaction_audit.py fixtures/sample.jsonl --files | grep -qv "command" || exit 1
+          # `grep -qv` exits 0 when ANY line lacks the word, so it passed on a
+          # build that DID print a Bash call. Assert absence instead.
+          if python3 compaction_audit.py fixtures/sample.jsonl --files | grep -q "command"; then
+            echo "a Bash tool call leaked into the dropped-file list"; exit 1
+          fi
       - name: single-window and json modes
         run: |
           python3 compaction_audit.py fixtures/sample.jsonl --only 2 | grep "window 2 of 2"
           python3 compaction_audit.py fixtures/sample.jsonl --json | python3 -c "import json,sys; d=json.load(sys.stdin); w=list(d.values())[0]; assert len(w)==2 and w[0]['files']"
+      - name: --min-kept gates on the kept ratio
+        run: |
+          python3 compaction_audit.py fixtures/sample.jsonl --json --min-kept 1
+          if python3 compaction_audit.py fixtures/sample.jsonl --json --min-kept 90; then
+            echo "--min-kept did not fail below its floor"; exit 1
+          fi
       - name: a directory with no compactions exits clean
         run: |
           mkdir -p /tmp/empty && echo '{"type":"user","message":{"content":"hi"}}' > /tmp/empty/s.jsonl
