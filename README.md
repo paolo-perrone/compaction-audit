@@ -13,7 +13,7 @@ from the transcript files already sitting on your machine.
 ## Run it
 
 ```bash
-git clone https://github.com/paoloap-py/compaction-audit.git
+git clone https://github.com/paolo-perrone/compaction-audit.git
 cd compaction-audit
 python3 compaction_audit.py --self-test
 ```
